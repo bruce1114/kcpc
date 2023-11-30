@@ -1,6 +1,6 @@
 // #define scalability
-// #define noscalability
-#define scalabilitye
+#define noscalability
+// #define scalabilitye
 
 #include"../src/utils.cpp"
 #include"../src/graph.cpp"
@@ -88,6 +88,35 @@ void outputKcpc(vector<vector<int> >& results,vector<vector<int> >& cliques){
             }
             cout<<endl;
         }
+    }
+}
+
+void output_kcpc_purenodes(vector<vector<int> >& results,vector<vector<int> >& cliques){
+    vector<vector<int> > realresults;
+    for(int i=0;i<results.size();++i){
+        unordered_set<int> tst;
+        for(int j=0;j<results[i].size();++j){
+            int c=results[i][j];
+            for(int k=0;k<cliques[c].size();++k) tst.insert(cliques[c][k]);
+        }
+
+        vector<int> temp;
+        unordered_set<int>::iterator it=tst.begin();
+        while(it!=tst.end()){
+            temp.push_back(*it);
+            ++it;
+        }
+        sort(temp.begin(),temp.end());
+        realresults.push_back(temp);
+    }
+    sort(realresults.begin(),realresults.end());
+
+    for(int i=0;i<realresults.size();++i){
+        for(int j=0;j<realresults[i].size();++j){
+            cout<<realresults[i][j];
+            if(j!=realresults[i].size()-1) cout<<" ";
+        }
+        cout<<endl;
     }
 }
 
@@ -186,6 +215,7 @@ int main(int argc, char *argv[]){
     cerr<<"all time: "<<(allend.tv_sec-allstart.tv_sec)*1000+(allend.tv_usec-allstart.tv_usec)/1000<<endl;
 
     if(wait==1) outputKcpc(results,cliques);
+    else if(wait==2) output_kcpc_purenodes(results,cliques);
     return 0;
 
     vector<vector<int> > realresults;

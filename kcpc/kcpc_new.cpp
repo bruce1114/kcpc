@@ -27,20 +27,29 @@ void outputKcpc(vector<vector<int> >& results,vector<vector<int> >& cliques){
 }
 
 void output_kcpc_purenodes(vector<vector<int> >& results,vector<vector<int> >& cliques){
+    vector<vector<int> > realresults;
     for(int i=0;i<results.size();++i){
-        cout<<"kcpc nodes-------"<<endl;
-        unordered_set<int> tset;
+        unordered_set<int> tst;
         for(int j=0;j<results[i].size();++j){
             int c=results[i][j];
-            for(int k=0;k<cliques[c].size();++k){
-                tset.insert(cliques[c][k]);
-            }
+            for(int k=0;k<cliques[c].size();++k) tst.insert(cliques[c][k]);
         }
 
-        unordered_set<int>::iterator it=tset.begin();
-        while(it!=tset.end()){
-            cout<<*it<<" ";
-            it++;
+        vector<int> temp;
+        unordered_set<int>::iterator it=tst.begin();
+        while(it!=tst.end()){
+            temp.push_back(*it);
+            ++it;
+        }
+        sort(temp.begin(),temp.end());
+        realresults.push_back(temp);
+    }
+    sort(realresults.begin(),realresults.end());
+
+    for(int i=0;i<realresults.size();++i){
+        for(int j=0;j<realresults[i].size();++j){
+            cout<<realresults[i][j];
+            if(j!=realresults[i].size()-1) cout<<" ";
         }
         cout<<endl;
     }
