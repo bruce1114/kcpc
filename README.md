@@ -1,4 +1,4 @@
-# **Source code for "Large-scale k Clique Percolation Community Detection"**
+# **Source code for "Scaling Up k-Clique Percolation Community Detection"**
 This repository contains a reference implementation of algorithms for KCPC mining in large-scale graphs, including all the algorithms used in experiments (Detect, KCL, QKC, KCL-MCL and KCL-QKC).
 
 ## **Environment Setup** ##
