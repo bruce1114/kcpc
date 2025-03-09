@@ -191,6 +191,8 @@ int main(int argc, char *argv[]){
     }
 
 
+
+    // adding edges
     Graph sgraph;
     graph.initUpdate();
     vector<vector<int> > newcliques;
@@ -208,42 +210,12 @@ int main(int argc, char *argv[]){
         sgraph.clearAdjList();
         graph.prepareNextUpdate();
 
-        // for(int j=0;j<cliques.size();++j){
-        //     for(int k=0;k<cliques[j].size();++k){
-        //         int u=cliques[j][k];
-        //         cerr<<u<<" ";
-        //     }
-        //     cerr<<endl;
-        // }
-        // cerr<<"here"<<endl;
-
 
         newcliques.clear();
     }
 
     cerr<<"clique num: "<<outputCliquenum(cliques)<<" fake clique num: "<<disabledCliques.size()<<" kcpc num: "<<outputKCPCnum(fans)<<endl;
 
-    // unordered_map<int,vector<int> > cliqueGroup;
-    
-    // for(int i=0;i<fans.fa.size();++i){
-    //     int father=fans.find(i);
-    //     cliqueGroup[father].push_back(i);
-    // }
-
-    // vector<vector<int> > results;
-    // unordered_map<int,vector<int> >::iterator it=cliqueGroup.begin();
-    // while(it!=cliqueGroup.end()){
-    //     results.push_back(it->second);
-    //     it++;
-    // }
-    // gettimeofday(&allend,NULL);
-    // cerr<<"clique num: "<<cliques.size()<<endl;
-    // cerr<<"all time: "<<(allend.tv_sec-allstart.tv_sec)*1000+(allend.tv_usec-allstart.tv_usec)/1000<<endl;
-    // cerr<<"kcpc num: "<<results.size()<<endl;
-
-    // if(wait==0) return 0;
-    // else if(wait==1) outputKcpc(results,cliques);
-    // else output_kcpc_purenodes(results,cliques);
 
 
 }
