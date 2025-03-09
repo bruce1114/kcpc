@@ -20,6 +20,9 @@ using namespace std;
 class Graph{
 public:
     vector<vector<int>> adjList;
+    unordered_map<int,unordered_set<int>> adjMatrix;
+
+    
     vector<int> fullNodeslist;
     vector<bool> visGroup;
     vector<int> visGroups;
@@ -27,13 +30,30 @@ public:
     //for connect maximal clique
     int maximumClique;
 
+    vector<int> commonNeighbors;
+    vector<int> vlist2induce;
+    vector<int> induce2vlist;
+
     void readGraph(string filename);
+    void readGraphPart(string filename);
+    void readGraphPart(string filename,vector<vector<int> >& leftLines,int percent);
     void reduceGraph(int percent);
     void readGraphE(string filename,int percent);
 
+    void initUpdate();
+    bool addEdge(int a,int b);
+    void findNewMClique(Graph& ngraph,int a,int b,int kval,vector<vector<int>>& newCliques);
+    void bornGraph(Graph& ngraph,vector<int>& vlist);
+    void clearAdjList();
+    void prepareNextUpdate();
+
     void listMaximalCliques(vector<vector<int>>& cliques,int kval);
+    void listMaximalCliques_pivotexm(vector<vector<int>>& cliques,int kval);
     void listMaximalCliquesRegular(vector<vector<int>>& cliques);
     void listMaximalCliquesRegularDegeneracy(vector<vector<int>>& cliques);
+
+    void ktrussCommunity(int kval,int nodeId,vector<vector<pair<int,int> > >& ktcs);
+    void ktrussCommunityjjq(int kval,int nodeId,vector<vector<pair<int,int> > >& ktcs);
 
     void listMaximalCliqueNoPivot(vector<vector<int> >& cliques);
     void bkNoPivot(vector<int>& PX,vector<int>& IPX,int xbegin,int pbegin,int pend,vector<int>& R,vector<vector<int> >& cliques);
@@ -42,6 +62,7 @@ public:
     int getDegeneracyOrder(vector<int>& order,vector<int>& coreNumber,vector<vector<int> >& later);
     int getDegeneracyOrder(vector<int>& nodeslist,vector<int>& order,vector<vector<int> >& later,vector<int>& IPX,int pr);
     void bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques);
+    void bkPivot_exam(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques);
     // void bkPivot(vector<int>& P,vector<int>& IP,vector<int>& X,vector<int>& IX,int candIndex,int xIndex,vector<int>& R,vector<vector<int>>& cliques);
     void bkPivotRegular(unordered_set<int> cand,vector<int> curclique,unordered_set<int> X,vector<vector<int>>& holdcliques);
     // void exchange(vector<int>& arr,int aIndex,int bIndex,vector<int>& arrIndex,int de);
@@ -54,9 +75,16 @@ public:
     void buildGraphViaEdges(vector<pair<int,int> >& edges);
 
     void listConnectMaximalCliques(int kval,int nopivotRatio,int nopivotPSize,bool savePivot,vector<vector<int>>& cliques,unf& fans);
+    void listConnectMaximalCliquesOnlyP(int kval,int nopivotPSize,vector<vector<int>>& cliques,unf& fans);
+    void listConnectMaximalCliquesAlmostAll(int kval,int nopivotPSize,vector<vector<int>>& cliques,unf& fans);
     int bkConnect(bool needPivot,int nopivotPSize,bool savePivot,bool connectDirect,bool subClique,cliqueTree& tree,unf& f,unf& fans,int kval,vector<int>& orderIndex,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,vector<vector<int> >& later,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques);
+    int bkConnectOnlyP(bool needPivot,int nopivotPSize,int kval,bool subClique,unf& fans,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,vector<vector<int> >& later,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques);
+    int bkConnectAlmostAll(bool needPivot,int nopivotPSize,int kval,bool subClique,cliqueTree& tree,unf& fans,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,vector<vector<int> >& later,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques);
     void connectCliques(cliqueTree& tree,unf& f,unf& fans,vector<int>& orderIndex,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,vector<int>& IPX,int xl,int pl,int pr,vector<vector<int> >& later,vector<vector<int> >& tempAdjList,vector<int>& R);
+    int connectCliquesAlmostAll(cliqueTree& tree,unf& fans,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,int xl,int pl,int pr,vector<int>& R);
     inline int getAnyCliqueId(cliqueTree& tree, unordered_set<int>& theParts,unordered_set<int>& RParts, int startTreeNode);
+    void getAndConnectCliqueId(cliqueTree& tree,unordered_set<int>& theParts,int startTreeNode,vector<int>& holdCliqueIDs);
+    void getAndConnectCliqueIdFix(cliqueTree& tree,unordered_set<int>& theParts,unordered_set<int>& RPart,int startTreeNode,vector<int>& holdCliqueIDs);
     void testGroupOverlap(int kval,vector<vector<int> >& cliques,unf& fans);
     bool checkCommonGroup(vector<int>& Pmcliques,int pmr,unf& fans);
 
@@ -94,7 +122,53 @@ public:
     long long treenodecnt;
     #endif
 
+    #ifdef PersistPivotRecursion
+    vector<vector<int> > tempCandPersist;
+    vector<vector<int> > tempNewXPersist;
+    #endif
+
 };
+
+void Graph::ktrussCommunity(int kval,int nodeId,vector<vector<pair<int,int> > >& ktcs){
+    
+}
+
+void Graph::getAndConnectCliqueIdFix(cliqueTree& tree,unordered_set<int>& theParts,unordered_set<int>& RPart,int startTreeNode,vector<int>& holdCliqueIDs){
+    if(tree.treeNodePool[startTreeNode].leafMark!=-1){
+        holdCliqueIDs.push_back(tree.treeNodePool[startTreeNode].leafMark);
+        return;
+    }
+
+    vector<int>& sons=tree.treeNodePool[startTreeNode].sons;
+
+    for(int i=0;i<sons.size();++i){
+        int theInNode=tree.treeNodePool[sons[i]].inNode;
+        if(theParts.find(theInNode)!=theParts.end()){
+            getAndConnectCliqueIdFix(tree,theParts,RPart,sons[i],holdCliqueIDs);
+            if(RPart.find(theInNode)!=RPart.end()){
+                // cerr<<"here"<<endl;
+                break;//后面的分支不可能有theInNode
+            }
+        }
+    }
+}
+
+void Graph::getAndConnectCliqueId(cliqueTree& tree,unordered_set<int>& theParts,int startTreeNode,vector<int>& holdCliqueIDs){
+    if(tree.treeNodePool[startTreeNode].leafMark!=-1){
+        holdCliqueIDs.push_back(tree.treeNodePool[startTreeNode].leafMark);
+        return;
+    }
+
+    vector<int>& sons=tree.treeNodePool[startTreeNode].sons;
+
+    for(int i=0;i<sons.size();++i){
+        int theInNode=tree.treeNodePool[sons[i]].inNode;
+        if(theParts.find(theInNode)!=theParts.end()){
+            getAndConnectCliqueId(tree,theParts,sons[i],holdCliqueIDs);
+        }
+    }
+}
+
 
 void Graph::readGraphE(string filename,int percent){
     vector<vector<int> > holdLines;
@@ -1200,7 +1274,10 @@ void Graph::kcliqueConnectWithMcliqueNox(unf& fans,int kval,vector<int>& InP,vec
     for(int i=0;i<candP.size();++i){
         int u=candP[i];
     #endif
+
+        #ifndef nocolor
         if(R.size()+node2color[u]+1<kval-1) continue;
+        #endif
 
         //get mclique
         int npmr=0;
@@ -1350,6 +1427,7 @@ void Graph::listConnectKcliquesPartialNox(int kval,vector<int>& nodeslist,vector
     int degeneracy=getDegeneracyOrder(nodeslist,order,later,IPX,pr);
     cerr<<"partial degeneracy: "<<degeneracy<<endl;
 
+    #ifndef nocolor
     //coloring the nodes
     vector<int> node2color;
     node2color.resize(adjlistSize,-1);
@@ -1400,6 +1478,12 @@ void Graph::listConnectKcliquesPartialNox(int kval,vector<int>& nodeslist,vector
             }
         }
     }
+    #endif
+
+    #ifdef nocolor
+    vector<int> node2color;
+    vector<vector<int> > colorLater=later;
+    #endif
     int bigDegree=0;
     for(int i=0;i<nodeslist.size();++i){
         int u=nodeslist[i];
@@ -1446,9 +1530,11 @@ void Graph::listConnectKcliquesPartialNox(int kval,vector<int>& nodeslist,vector
 
     for(int i=0;i<order.size();++i){
         int u=order[i];
+        #ifndef nocolor
         if(node2color[u]+1<kval-1){//等于kval-1也行
             continue;
         }
+        #endif
 
         int pmr=0;
         for(int j=0;j<node2clique[u].size();++j){
@@ -4086,15 +4172,141 @@ void Graph::listMaximalCliquesRegular(vector<vector<int>>& cliques){
     bkPivotRegular(nodeset,vector<int>(),unordered_set<int>(),cliques);
 }
 
-void Graph::bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques){
+void Graph::bkPivot_exam(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques){
     if(pr<pl){
-        if(xl>=pl&&R.size()>=kval) cliques.emplace_back(vector<int>(R.begin(),R.begin()+R.size()));
+        if(xl>=pl&&R.size()>=kval){
+
+            #ifdef reportcliquenum
+            if(cliques.size()%28351778==0) cout<<"current maximal clique num: "<<cliques.size()<<endl;
+            #endif
+
+            cliques.emplace_back(vector<int>(R.begin(),R.begin()+R.size()));
+
+        }
         return;
     }
     int psize=pr-pl+1;
     int xsize=pl-xl;
 
     if(R.size()+psize<kval) return;
+
+    vector<int> tempCand;
+
+    int candr=pr;
+    //select pivot
+    for(int i=xl;i<candr;++i){
+        int u=PX[i];
+        int j;
+        for(j=0;j<tempAdjList[u].size();++j){
+            int v=tempAdjList[u][j];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            if(IPX[v]>candr) continue;
+            exchange(PX,IPX[v],candr--,IPX);
+        }
+    }
+
+    if(candr-pl+1>0) tempCand.assign(PX.begin()+pl,PX.begin()+candr+1);
+    vector<int> tempNewX;
+    // tempNewX.reserve(xsize);
+
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+
+        // tempNewX.clear();
+        
+        //searching in X
+        // for(int j=xl;j<pl;++j){
+        //     int v=PX[j];
+        //     for(int k=0;k<tempAdjList[v].size();++k){
+        //         int possibleU=tempAdjList[v][k];
+        //         if(IPX[possibleU]<pl||IPX[possibleU]>pr) break;
+        //         if(possibleU==u){
+        //             tempNewX.push_back(v);
+        //             break;
+        //         }
+        //     }
+        // }
+        //no need for searching in P
+
+        //prepare new X and P
+        int nxl=pl-1;
+        int npr=pl;
+        // for(int j=0;j<tempNewX.size();++j){
+        //     exchange(PX,IPX[tempNewX[j]],nxl--,IPX);
+        // }
+        for(int j=0;j<tempAdjList[u].size();++j){
+            int v=tempAdjList[u][j];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            exchange(PX,IPX[v],npr++,IPX);
+        }
+        nxl++;
+        npr--;
+
+        //shrink tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int numNeighborInNewP=0;
+            for(int k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl||IPX[nv]>pr) break;
+                if(IPX[nv]<=npr){
+                    exchange(tempAdjList[v],k,numNeighborInNewP++);
+                }
+            }
+        }
+
+        R.push_back(u);
+        bkPivot_exam(kval,PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        R.pop_back();
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+        
+        //update tempAdjList
+        for(int j=pl;j<=pr;++j){//u has no edge with vertices in X
+            int v=PX[j];
+            int uindex=-1;
+            int k;
+            for(k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl-1||IPX[nv]>pr) break;
+                if(nv==u) uindex=k;
+            }
+            if(uindex==-1) continue;
+            exchange(tempAdjList[v],uindex,k-1);
+        }
+    }
+
+    //recover X
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+        exchange(PX,IPX[u],--pl,IPX);
+    }
+
+}
+
+void Graph::bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques){
+    if(pr<pl){
+        if(xl>=pl&&R.size()>=kval){
+
+            #ifdef reportcliquenum
+            if(cliques.size()%28351778==0) cout<<"current maximal clique num: "<<cliques.size()<<endl;
+            #endif
+
+            cliques.emplace_back(vector<int>(R.begin(),R.begin()+R.size()));
+
+        }
+        return;
+    }
+    int psize=pr-pl+1;
+    int xsize=pl-xl;
+
+    if(R.size()+psize<kval) return;
+
+    #ifdef PersistPivotRecursion
+    vector<int>& tempCand=tempCandPersist[R.size()];
+    tempCand.clear();
+    #else
+    vector<int> tempCand;
+    #endif
 
     #ifndef nopivot
     //select pivot
@@ -4116,8 +4328,8 @@ void Graph::bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int>
     }
 
     //generate real candidate
-    vector<int> tempCand;
-    tempCand.reserve(psize);
+
+
     int neil=pr;
     for(int i=0;i<tempAdjList[pivot].size();++i){
         int v=tempAdjList[pivot][i];
@@ -4134,7 +4346,7 @@ void Graph::bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int>
 
     #ifdef nopivot
     //generate real candidate
-    vector<int> tempCand;
+    // vector<int> tempCand;
     tempCand.assign(PX.begin()+pl,PX.begin()+pr+1);
     if(xl>=pl){
         bool isSubClique=true;
@@ -4157,11 +4369,19 @@ void Graph::bkPivot(int kval,vector<int>& PX,vector<int>& IPX,vector<vector<int>
     }
     #endif
 
+    #ifdef PersistPivotRecursion
+    vector<int>& tempNewX=tempNewXPersist[R.size()];
+    tempNewX.clear();
+    #else
+    vector<int> tempNewX;
+    tempNewX.reserve(xsize);
+    #endif
+
     for(int i=0;i<tempCand.size();++i){
         int u=tempCand[i];
+
+        tempNewX.clear();
         
-        vector<int> tempNewX;
-        tempNewX.reserve(xsize);
         //searching in X
         for(int j=xl;j<pl;++j){
             int v=PX[j];
@@ -4533,6 +4753,129 @@ int Graph::getDegeneracyOrder(vector<int>& order,vector<vector<int> >& later){
 
 }
 
+void Graph::listMaximalCliques_pivotexm(vector<vector<int>>& cliques,int kval){
+    int adjListSize=adjList.size();
+
+    vector<vector<int> > tempAdjList;
+    vector<int> PX,IPX,R;
+    PX.resize(adjListSize);
+    IPX.resize(adjListSize);
+    R.reserve(adjListSize);
+
+    //initialize PX and IPX
+    for(int i=0;i<adjListSize;++i){
+        PX[i]=IPX[i]=i;
+    }
+
+    vector<int> order;
+    vector<vector<int> > later;
+    int degenaracy=getDegeneracyOrder(order,later);
+
+    #ifdef overallexample6
+    order={0,16,15,13,14,12,11,10,1,8,7,2,4,5,9,6,3};
+    vector<int> temppos;
+    temppos.resize(17,-1);
+    for(int i=0;i<order.size();++i) temppos[order[i]]=i;
+    later=vector<vector<int> >();
+    later.resize(17);
+    for(int i=0;i<adjListSize;++i){
+        for(int j=0;j<adjList[i].size();++j){
+            int u=i,v=adjList[i][j];
+            if(temppos[u]<temppos[v]) later[u].push_back(v);
+        }
+    }
+    #endif
+
+    // cerr<<"degeneracy: "<<degenaracy<<endl;
+
+    //initialize tempAdjList
+    tempAdjList.resize(adjListSize);
+    for(int i=0;i<adjListSize;++i) tempAdjList[i].reserve(degenaracy);
+
+    #ifdef PersistPivotRecursion
+    tempCandPersist.assign(degenaracy+1,vector<int>());
+    for(int i=0;i<=degenaracy;++i){
+        tempCandPersist[i].reserve(adjListSize);
+    }
+    tempNewXPersist.assign(degenaracy+1,vector<int>());
+    for(int i=0;i<=degenaracy;++i){
+        tempNewXPersist[i].reserve(adjListSize);
+    }
+    #endif
+
+    int pl=0,pr=adjListSize-1;
+
+    //select pivot
+    vector<int> tempCand;
+    int candr=pr;
+    for(int i=0;i<candr;++i){
+        int u=PX[i];
+        int j;
+        for(j=0;j<later[u].size();++j){
+            int v=later[u][j];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            if(IPX[v]>candr) continue;
+            exchange(PX,IPX[v],candr--,IPX);
+        }
+    }
+
+
+
+    for(int i=0;i<order.size();++i){
+        int u=order[i];
+
+        #ifdef bkbar
+        if(i%(order.size()/100)==0){
+            cout<<i<<endl;
+            cout<<"clique num: "<<cliques.size()<<endl;
+        }
+        #endif
+
+        // obtain new P and X
+        int nxl=pl-1;
+        int npr=pl;
+        for(int j=0;j<adjList[u].size();++j){
+            int v=adjList[u][j];
+            if(IPX[v]<pl) exchange(PX,IPX[v],nxl--,IPX);
+            else exchange(PX,IPX[v],npr++,IPX);
+        }
+
+        
+        nxl++;
+        npr--;
+        //obtain new tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                //nv is in new P
+                if(IPX[nv]>=pl&&IPX[nv]<=npr){
+                    tempAdjList[v].push_back(nv);
+                    if(j>=pl){
+                        tempAdjList[nv].push_back(v);
+                    }
+                }
+            }
+        }
+
+        R.push_back(u);
+        #ifndef pivotexm
+        bkPivot(kval,PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        #else
+        bkPivot_exam(kval,PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        #endif
+        R.pop_back();
+
+        //clear tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            tempAdjList[v].clear();
+        }
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+
+    }
+}
+
 void Graph::listMaximalCliques(vector<vector<int> >& cliques,int kval){
     int adjListSize=adjList.size();
 
@@ -4571,6 +4914,17 @@ void Graph::listMaximalCliques(vector<vector<int> >& cliques,int kval){
     //initialize tempAdjList
     tempAdjList.resize(adjListSize);
     for(int i=0;i<adjListSize;++i) tempAdjList[i].reserve(degenaracy);
+
+    #ifdef PersistPivotRecursion
+    tempCandPersist.assign(degenaracy+1,vector<int>());
+    for(int i=0;i<=degenaracy;++i){
+        tempCandPersist[i].reserve(adjListSize);
+    }
+    tempNewXPersist.assign(degenaracy+1,vector<int>());
+    for(int i=0;i<=degenaracy;++i){
+        tempNewXPersist[i].reserve(adjListSize);
+    }
+    #endif
 
     int pl=0;
 
@@ -4612,7 +4966,11 @@ void Graph::listMaximalCliques(vector<vector<int> >& cliques,int kval){
         }
 
         R.push_back(u);
+        #ifndef pivotexm
         bkPivot(kval,PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        #else
+        bkPivot_exam(kval,PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        #endif
         R.pop_back();
 
         //clear tempAdjList
@@ -4663,6 +5021,144 @@ void Graph::listMaximalCliques(vector<vector<int> >& cliques,int kval){
 //         exchange(X,++xr,IX[u],IX); // X=X+{u}
 //     }
 // }
+
+void Graph::bornGraph(Graph& ngraph,vector<int>& vlist){
+    for(int i=0;i<vlist.size();++i){
+        int vertex=vlist[i];
+        vlist2induce[vertex]=i;
+        induce2vlist[i]=vertex;
+    }
+
+    ngraph.adjList.resize(vlist.size());
+
+    for (int vertex : vlist) {
+        for (int neighbor : adjList[vertex]) {
+            if (vlist2induce[neighbor] >= 0) {
+                ngraph.adjList[vlist2induce[vertex]].push_back(vlist2induce[neighbor]);
+            }
+        }
+    }
+}
+
+void Graph::clearAdjList(){
+    for(int i=0;i<adjList.size();++i){
+        adjList[i].clear();
+    }
+}
+
+void Graph::prepareNextUpdate(){
+    for(int neighbor:commonNeighbors){
+        induce2vlist[vlist2induce[neighbor]]=-1;
+        vlist2induce[neighbor]=-1;
+    }
+    commonNeighbors.clear();
+}
+
+void Graph::initUpdate(){
+    vlist2induce.resize(adjList.size(),-1);
+    induce2vlist.resize(adjList.size(),-1);
+}
+
+void Graph::findNewMClique(Graph& ngraph,int a,int b,int kval,vector<vector<int>>& newCliques){
+    for (int neighbor : adjList[a]) {
+        if (adjMatrix.at(b).find(neighbor) != adjMatrix.at(b).end()) {
+            commonNeighbors.push_back(neighbor);
+        }
+    }
+
+    commonNeighbors.push_back(a);
+    commonNeighbors.push_back(b);
+
+    bornGraph(ngraph,commonNeighbors);
+    ngraph.listMaximalCliques(newCliques,kval);
+    for(int i=0;i<newCliques.size();++i){
+        for(int j=0;j<newCliques[i].size();++j){
+            newCliques[i][j]=induce2vlist[newCliques[i][j]];
+        }
+    }
+
+}
+
+bool Graph::addEdge(int a,int b){
+    int maxNode = max(a, b);
+    if (maxNode >= adjList.size()) {
+        adjList.resize(maxNode + 1);
+    }
+
+    if (adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()) {
+        adjList[a].push_back(b); 
+        adjList[b].push_back(a); 
+
+        adjMatrix[a].insert(b);
+        adjMatrix[b].insert(a);
+
+        return true;
+    }else{
+        return false;
+    }
+}
+
+void Graph::readGraphPart(string filename){
+    vector<vector<int> > holdLines;
+    bool res=readFile(filename,holdLines);
+    if(!res) exit(0);
+
+    int bigval=0;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(bigval<holdLines[i][j]) bigval=holdLines[i][j];
+        }
+    }
+
+    adjList.resize(bigval+1);
+
+    for(int i=0;i<holdLines.size();++i){
+        int a=holdLines[i][0];
+        int b=holdLines[i][1];
+
+        if(adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()){
+            adjMatrix[a].insert(b);adjMatrix[b].insert(a);
+            adjList[a].push_back(b);
+            adjList[b].push_back(a);
+        }
+    }
+
+    for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
+}
+
+void Graph::readGraphPart(string filename,vector<vector<int> >& leftLines,int percent){
+    vector<vector<int> > holdLines;
+    bool res=readFile(filename,holdLines);
+    if(!res) exit(0);
+
+    int presize=holdLines.size()/100*percent;
+    leftLines.assign(holdLines.begin()+presize,holdLines.end());
+    holdLines.resize(presize);
+
+    int bigval=0;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(bigval<holdLines[i][j]) bigval=holdLines[i][j];
+        }
+    }
+    
+
+    adjList.resize(bigval+1);
+
+    // unordered_map<int,unordered_set<int>> tmpAdjMatrix;
+    for(int i=0;i<holdLines.size();++i){
+        int a=holdLines[i][0];
+        int b=holdLines[i][1];
+
+        if(adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()){
+            adjMatrix[a].insert(b);adjMatrix[b].insert(a);
+            adjList[a].push_back(b);
+            adjList[b].push_back(a);
+        }
+    }
+
+    for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
+}
 
 void Graph::readGraph(string filename){
     vector<vector<int> > holdLines;
