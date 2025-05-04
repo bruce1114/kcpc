@@ -136,15 +136,19 @@ int main(int argc, char *argv[]){
     filename=argv[1];
     kval=stoi(argv[2]);
     nopivotPSize=stoi(argv[3]);
-    int postsize=stoi(argv[4]);
+    int addvertexnum=stoi(argv[4]);
     pivotIterate=0;
     wait=stoi(argv[5]);
 
-    cerr<<argv[0]<<" "<<filename<<" "<<kval<<" "<<nopivotPSize<<" "<<postsize<<"%"<<endl;
+    cerr<<argv[0]<<" "<<filename<<" "<<kval<<" "<<nopivotPSize<<" "<<addvertexnum<<"%"<<endl;
 
     Graph graph;
-    vector<vector<int> > leftLines;
-    graph.readGraphPart(filename,leftLines,postsize);
+    // vector<vector<int> > leftLines;
+    unordered_map<int,vector<int>> leftEdges;
+    // graph.readGraphPart(filename,leftLines,postsize);
+    int largest;
+    graph.readGraphAddVertex(filename,leftEdges,addvertexnum,largest);
+
 
 
 
@@ -198,40 +202,33 @@ int main(int argc, char *argv[]){
     graph.initUpdate();
     vector<vector<int> > newcliques;
     gettimeofday(&start,NULL);
-    for(int i=0;i<leftLines.size();++i){
-        int a=leftLines[i][0];
-        int b=leftLines[i][1];
-        bool res=graph.addEdge(a,b);
-        if(res==false) continue;
+
+    int addedNode=0;
+    int upperbound=largest-addvertexnum;
+    for(int node=upperbound+1;node<=largest;++node){
+        if(leftEdges.find(node)==leftEdges.end()||leftEdges[node].size()==0){
+            continue;
+        }
+        addedNode++;
+        graph.addNode(node,leftEdges[node]);
         graph.initUpdate();
-        graph.findNewMClique(sgraph,a,b,kval,newcliques);
+        graph.findNewMCliqueAddNode(sgraph,node,kval,newcliques);
         updateKCPC(fans,newcliques,cliques,graph.adjList.size());
         //report
-        if(wait>0&&i%wait==0){
+        if(wait>0&&addedNode%wait==0){
             gettimeofday(&end,NULL);
             cout<<"clique num: "<<outputCliquenum(cliques)<<" fake clique num: "<<disabledCliques.size()<<" kcpc num: "<<outputKCPCnum(fans)<<endl;
-            cout<<"ave time: "<<((end.tv_sec-start.tv_sec)*1000+(end.tv_usec-start.tv_usec)/1000)*1.0/(i+1)<<endl;
+            cout<<"ave time: "<<((end.tv_sec-start.tv_sec)*1000+(end.tv_usec-start.tv_usec)/1000)*1.0/(addedNode)<<endl;
         }
-
         sgraph.clearAdjList();
         graph.prepareNextUpdate();
-
-        // for(int j=0;j<cliques.size();++j){
-        //     for(int k=0;k<cliques[j].size();++k){
-        //         int u=cliques[j][k];
-        //         cerr<<u<<" ";
-        //     }
-        //     cerr<<endl;
-        // }
-        // cerr<<"here"<<endl;
-
-
         newcliques.clear();
     }
     gettimeofday(&end,NULL);
 
     cerr<<"clique num: "<<outputCliquenum(cliques)<<" fake clique num: "<<disabledCliques.size()<<" kcpc num: "<<outputKCPCnum(fans)<<endl;
-    cerr<<"ave time: "<<((end.tv_sec-start.tv_sec)*1000+(end.tv_usec-start.tv_usec)/1000)*1.0/leftLines.size()<<endl;
+    cerr<<"ave time: "<<((end.tv_sec-start.tv_sec)*1000+(end.tv_usec-start.tv_usec)/1000)*1.0/(addedNode)<<endl;
+    cerr<<"addedNode: "<<addedNode<<endl;
 
     // unordered_map<int,vector<int> > cliqueGroup;
     

@@ -7,6 +7,7 @@
 #include"utils.cpp"
 #include<unordered_map>
 #include<unordered_set>
+#include<set>
 #include"cliqueTreeNode.cpp"
 #include"unionfind.cpp"
 #include<algorithm>
@@ -26,6 +27,7 @@ public:
     vector<int> fullNodeslist;
     vector<bool> visGroup;
     vector<int> visGroups;
+    vector<int> localCliqueMark;
 
     //for connect maximal clique
     int maximumClique;
@@ -33,19 +35,28 @@ public:
     vector<int> commonNeighbors;
     vector<int> vlist2induce;
     vector<int> induce2vlist;
+    
 
     void readGraph(string filename);
     void readGraphPart(string filename);
-    void readGraphPart(string filename,vector<vector<int> >& leftLines,int percent);
+    void readGraphPart(string filename,vector<vector<int> >& leftLines,int presize);
+    void readGraphAllReturnPart(string filename,vector<vector<int> >& returnLines,int presize);
+    void readGraphAddVertex(string filename,unordered_map<int,vector<int>>& leftEdges,int addvertexnum,int& largest);
+    void readGraphDelVertex(string filename,unordered_set<int>& deleteNodes,int delvertexnum);
     void reduceGraph(int percent);
     void readGraphE(string filename,int percent);
 
     void initUpdate();
     bool addEdge(int a,int b);
+    bool addNode(int node,vector<int>& neiList);
+    bool delEdge(int a,int b);
     void findNewMClique(Graph& ngraph,int a,int b,int kval,vector<vector<int>>& newCliques);
+    void findNewMCliqueAddNode(Graph& ngraph,int node,int kval,vector<vector<int>>& newCliques);
     void bornGraph(Graph& ngraph,vector<int>& vlist);
     void clearAdjList();
     void prepareNextUpdate();
+    void delEdgeClique(int a,int b,vector<vector<int>>& node2cliques);
+    void localKCLMCL(int kval,vector<vector<int> >& cliques,unf& fans);
 
     void listMaximalCliques(vector<vector<int>>& cliques,int kval);
     void listMaximalCliques_pivotexm(vector<vector<int>>& cliques,int kval);
@@ -169,6 +180,660 @@ void Graph::getAndConnectCliqueId(cliqueTree& tree,unordered_set<int>& theParts,
     }
 }
 
+//需要在儿子节点探索完毕后调用，因为只用了xTreeNodesStack
+int Graph::connectCliquesAlmostAll(cliqueTree& tree,unf& fans,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,int xl,int pl,int pr,vector<int>& R){
+    unordered_set<int> candidateSet,RSet;
+    for(int i=xl;i<=pr;++i) candidateSet.insert(PX[i]);
+    for(int i=0;i<R.size();++i){
+        candidateSet.insert(R[i]);
+        #ifdef almostAllfix
+        RSet.insert(R[i]);
+        #endif
+    }
+    
+    vector<int> holdCliqueIDs;
+    for(int i=xl;i<pl;++i){
+        if(firstLayerSons[PX[i]]!=-1){
+            #ifdef almostAllfix
+            getAndConnectCliqueIdFix(tree,candidateSet,RSet,tree.treeNodePool[tree.root].sons[firstLayerSons[PX[i]]],holdCliqueIDs);
+            #else
+            getAndConnectCliqueId(tree,candidateSet,tree.treeNodePool[tree.root].sons[firstLayerSons[PX[i]]],holdCliqueIDs);
+            #endif
+            // getAndConnectCliqueId(tree,candidateSet,tree.treeNodePool[tree.root].sons[firstLayerSons[PX[i]]],holdCliqueIDs);
+        }
+    }
+    
+    for(int i=0;i<xTreeNodesStack.size();++i){
+        int theInNode=tree.treeNodePool[xTreeNodesStack[i]].inNode;
+        if(candidateSet.find(theInNode)!=candidateSet.end()){
+            #ifdef almostAllfix
+            getAndConnectCliqueIdFix(tree,candidateSet,RSet,xTreeNodesStack[i],holdCliqueIDs);
+            #else
+            getAndConnectCliqueId(tree,candidateSet,xTreeNodesStack[i],holdCliqueIDs);
+            #endif
+            // getAndConnectCliqueId(tree,candidateSet,xTreeNodesStack[i],holdCliqueIDs);
+        }
+    }
+
+    if(holdCliqueIDs.size()==0){
+        cerr<<"holdCliqueIDs error"<<endl;
+        exit(0);
+    }
+
+    if(holdCliqueIDs.size()>1){
+        for(int i=1;i<holdCliqueIDs.size();++i){
+            fans.merge(holdCliqueIDs[0],holdCliqueIDs[i]);
+        }
+    }
+
+    return fans.find(holdCliqueIDs[0]);
+
+}
+
+int Graph::bkConnectAlmostAll(bool needPivot,int nopivotPSize,int kval,bool subClique,cliqueTree& tree,unf& fans,vector<int>& firstLayerSons,vector<int>& xTreeNodesStack,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,vector<vector<int> >& later,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques){
+    if(pr<pl){
+        if(xl>=pl&&R.size()>=kval){
+
+            cliques.emplace_back(vector<int>(R.begin(),R.begin()+R.size()));
+            int theNode=tree.getNewNode();
+            tree.treeNodePool[theNode].leafMark=cliques.size()-1;
+            tree.treeNodePool[theNode].inNode=R[R.size()-1];
+            return theNode;
+        }
+        if(xl<pl&&R.size()>=kval-1){//需要链接一下clique
+            //扩展一下fans
+            fans.updateSize(cliques.size());
+            // connectCliques(tree,f,fans,orderIndex,firstLayerSons,xTreeNodesStack,PX,IPX,xl,pl,pr,later,tempAdjList,R);
+            connectCliquesAlmostAll(tree,fans,firstLayerSons,xTreeNodesStack,PX,xl,pl,pr,R);
+        }
+        return -1;
+    }
+
+    int psize=pr-pl+1;
+    int xsize=pl-xl;
+    if(R.size()+psize<kval-1) return -1;
+
+    int originalPl=pl;
+    vector<int> tempCand;
+
+    if(subClique){
+        tempCand.push_back(PX[pl]);
+    }else if(needPivot){
+        //select pivot
+        int big=-1;
+        int pivotIndex=-1;
+        int pivot=-1;
+        bool isSubClique=true;//检查是不是仅仅只是一个子clique
+        for(int i=xl;i<=pr;++i){
+            int u=PX[i];
+            int j;
+            for(j=0;j<tempAdjList[u].size();++j){
+                int v=tempAdjList[u][j];
+                if(IPX[v]<pl||IPX[v]>pr) break;
+            }
+            if(j!=psize-1){
+                isSubClique=false;
+            }
+            if(j>big){
+                big=j;
+                pivotIndex=i;
+                pivot=u;
+            }
+        }
+
+        if(xsize>0) isSubClique=false;//不考虑有x的情况
+
+        //generate real candidate
+        tempCand.reserve(psize);
+        int neil=pr;
+        for(int i=0;i<tempAdjList[pivot].size();++i){
+            int v=tempAdjList[pivot][i];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            exchange(PX,IPX[v],neil--,IPX);
+        }
+
+        // for(int i=pl;i<=neil;++i){
+        //     tempCand.push_back(PX[i]);
+        // }
+
+        if(isSubClique==true){
+            subClique=true;
+        }
+
+        // if(savePivot==true) tempCand.assign(PX.begin()+pl,PX.begin()+pr+1);
+        // else tempCand.assign(PX.begin()+pl,PX.begin()+neil+1);
+        tempCand.assign(PX.begin()+pl,PX.begin()+neil+1);
+    }else{
+        //generate real candidate
+        tempCand.assign(PX.begin()+pl,PX.begin()+pr+1);
+        if(xl>=pl){
+            bool isSubClique=true;
+            for(int i=pl;i<=pr;++i){
+                int j;
+                int u=PX[i];
+                for(j=0;j<tempAdjList[u].size();++j){
+                    int v=tempAdjList[u][j];
+                    if(IPX[v]<pl||IPX[v]>pr) break;
+                }
+                if(j!=psize-1){
+                    isSubClique=false;
+                    break;
+                }
+            }
+            if(isSubClique){
+                tempCand.clear();
+                tempCand.push_back(PX[pl]);
+                subClique=true;
+            }
+        }
+    }
+
+
+    int curTreeNode=-1;
+    int inTreeVertex=R[R.size()-1];
+    int oriXTreeStackSize=xTreeNodesStack.size();
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+        
+        vector<int> tempNewX;
+        tempNewX.reserve(xsize);
+        //searching in X
+        for(int j=xl;j<pl;++j){
+            int v=PX[j];
+            for(int k=0;k<tempAdjList[v].size();++k){
+                int possibleU=tempAdjList[v][k];
+                if(IPX[possibleU]<pl||IPX[possibleU]>pr) break;
+                if(possibleU==u){
+                    tempNewX.push_back(v);
+                    break;
+                }
+            }
+        }
+        //no need for searching in P
+
+        //prepare new X and P
+        int nxl=pl-1;
+        int npr=pl;
+        for(int j=0;j<tempNewX.size();++j){
+            exchange(PX,IPX[tempNewX[j]],nxl--,IPX);
+        }
+        for(int j=0;j<tempAdjList[u].size();++j){
+            int v=tempAdjList[u][j];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            exchange(PX,IPX[v],npr++,IPX);
+        }
+        nxl++;
+        npr--;
+
+        //shrink later
+        #ifdef fasterconnect
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int nsize=0;
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                if(IPX[nv]<xl||IPX[nv]>pr) break;
+                if(IPX[nv]>=nxl&&IPX[nv]<=npr){
+                    exchange(later[v],k,nsize++);
+                }
+            }
+        }
+        #endif
+
+        //shrink tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int numNeighborInNewP=0;
+            for(int k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl||IPX[nv]>pr) break;
+                if(IPX[nv]<=npr){
+                    exchange(tempAdjList[v],k,numNeighborInNewP++);
+                }
+            }
+        }
+
+        R.push_back(u);
+        // bkPivot(PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        // int res=bkConnect(needPivot&&(npr-pl+1)>nopivotPSize,nopivotPSize,savePivot,i>=tobeSave,subClique,tree,f,fans,kval,orderIndex,firstLayerSons,xTreeNodesStack,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        // int res=bkConnectOnlyP(needPivot&&(npr-pl+1)>nopivotPSize,nopivotPSize,kval,subClique,fans,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        int res=bkConnectAlmostAll(needPivot&&(npr-pl+1)>nopivotPSize,nopivotPSize,kval,subClique,tree,fans,firstLayerSons,xTreeNodesStack,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        if(res>=0){
+            if(curTreeNode==-1){
+                curTreeNode=tree.getNewNode();
+                tree.treeNodePool[curTreeNode].leafMark=-1;//to be settled
+                tree.treeNodePool[curTreeNode].inNode=inTreeVertex;
+            }
+            tree.treeNodePool[curTreeNode].sons.push_back(res);
+            xTreeNodesStack.push_back(res);
+        }
+
+        R.pop_back();
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+        
+        //update tempAdjList
+        for(int j=xl;j<=pr;++j){
+            int v=PX[j];
+            int uindex=-1;
+            int k;
+            for(k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl-1||IPX[nv]>pr) break;
+                if(nv==u) uindex=k;
+            }
+            if(uindex==-1) continue;
+            exchange(tempAdjList[v],uindex,k-1);
+        }
+    }
+
+    //recover X
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+        exchange(PX,IPX[u],--pl,IPX);
+    }
+
+    if(R.size()>=kval-1){
+        //update size of fans
+        fans.updateSize(cliques.size());
+        //link cliques
+        // connectCliques(tree,f,fans,orderIndex,firstLayerSons,xTreeNodesStack,PX,IPX,xl,originalPl,pr,later,tempAdjList,R);
+        int res=connectCliquesAlmostAll(tree,fans,firstLayerSons,xTreeNodesStack,PX,xl,originalPl,pr,R);
+        if(curTreeNode!=-1){
+            tree.treeNodePool[curTreeNode].leafMark=res;
+        }
+    }
+
+    xTreeNodesStack.resize(oriXTreeStackSize);
+    return curTreeNode;
+}
+
+void Graph::listConnectMaximalCliquesAlmostAll(int kval,int nopivotPSize,vector<vector<int>>& cliques,unf& fans){
+    int adjListSize=adjList.size();
+
+    vector<vector<int> > tempAdjList;
+    vector<int> PX,IPX,R;
+    PX.resize(adjListSize);
+    IPX.resize(adjListSize);
+    R.reserve(adjListSize);
+
+    //initialize PX and IPX
+    for(int i=0;i<adjListSize;++i){
+        PX[i]=IPX[i]=i;
+    }
+
+    cliqueTree tree;
+    tree.root=tree.getNewNode();
+    tree.treeNodePool[tree.root].inNode=-1;
+    tree.treeNodePool[tree.root].leafMark=-1;
+
+    vector<vector<int> > later;
+    vector<int> order;
+    vector<int> orderIndex;
+    int degenaracy=getDegeneracyOrder(order,later);
+
+    cerr<<"degeneracy: "<<degenaracy<<endl;
+    orderIndex.resize(adjListSize);
+    for(int i=0;i<order.size();++i){
+        orderIndex[order[i]]=i;
+    }
+
+    //initialize tempAdjList
+    tempAdjList.resize(adjListSize);
+    for(int i=0;i<adjListSize;++i) tempAdjList[i].reserve(degenaracy);
+
+    int pl=0;
+    vector<int> firstLayerSons,xTreeNodesStack;
+    firstLayerSons.resize(adjListSize,-1);
+    xTreeNodesStack.reserve(adjListSize);
+
+    for(int i=0;i<order.size();++i){
+        int u=order[i];
+
+        // obtain new P and X
+        int nxl=pl-1;
+        int npr=pl;
+        for(int j=0;j<adjList[u].size();++j){
+            int v=adjList[u][j];
+            if(IPX[v]<pl) exchange(PX,IPX[v],nxl--,IPX);
+            else exchange(PX,IPX[v],npr++,IPX);
+        }
+
+        nxl++;
+        npr--;
+        //shrink later
+        #ifdef fasterconnect
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int nsize=0;
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                if(IPX[nv]>=nxl&&IPX[nv]<=npr){
+                    exchange(later[v],k,nsize++);
+                }
+            }
+        }
+        #endif
+
+        //obtain new tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                #ifdef fasterconnect
+                if(IPX[nv]<nxl||IPX[nv]>npr) break;
+                #endif
+                //nv is in new P
+                if(IPX[nv]>=pl&&IPX[nv]<=npr){
+                    tempAdjList[v].push_back(nv);
+                    if(j>=pl){
+                        tempAdjList[nv].push_back(v);
+                    }
+                }
+            }
+        }
+
+        R.push_back(u);
+
+        int node=bkConnectAlmostAll((npr-pl+1)>nopivotPSize,nopivotPSize,kval,false,tree,fans,firstLayerSons,xTreeNodesStack,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        R.pop_back();
+
+        if(node!=-1){
+            tree.treeNodePool[tree.root].sons.push_back(node);
+            firstLayerSons[u]=tree.treeNodePool[tree.root].sons.size()-1;
+        }
+
+        //clear tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            tempAdjList[v].clear();
+        }
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+    }
+}
+
+int Graph::bkConnectOnlyP(bool needPivot,int nopivotPSize,int kval,bool subClique,unf& fans,vector<int>& PX,vector<int>& IPX,vector<vector<int> >& tempAdjList,vector<vector<int> >& later,int xl,int pl,int pr,vector<int>& R,vector<vector<int>>& cliques){
+    if(pr<pl){
+        if(xl>=pl&&R.size()>=kval){
+
+            cliques.emplace_back(vector<int>(R.begin(),R.begin()+R.size()));
+            return cliques.size()-1;
+        }
+        return -1;
+    }
+
+    int psize=pr-pl+1;
+    int xsize=pl-xl;
+
+    if(R.size()+psize<kval-1) return -1;
+
+    int originalPl=pl;
+    vector<int> tempCand;
+
+    if(subClique){
+        tempCand.push_back(PX[pl]);
+    }else if(needPivot){
+        //select pivot
+        int big=-1;
+        int pivotIndex=-1;
+        int pivot=-1;
+        bool isSubClique=true;//检查是不是仅仅只是一个子clique
+        for(int i=xl;i<=pr;++i){
+            int u=PX[i];
+            int j;
+            for(j=0;j<tempAdjList[u].size();++j){
+                int v=tempAdjList[u][j];
+                if(IPX[v]<pl||IPX[v]>pr) break;
+            }
+            if(j!=psize-1){
+                isSubClique=false;
+            }
+            if(j>big){
+                big=j;
+                pivotIndex=i;
+                pivot=u;
+            }
+        }
+
+        if(xsize>0) isSubClique=false;//不考虑有x的情况
+
+        //generate real candidate
+        tempCand.reserve(psize);
+        int neil=pr;
+        for(int i=0;i<tempAdjList[pivot].size();++i){
+            int v=tempAdjList[pivot][i];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            exchange(PX,IPX[v],neil--,IPX);
+        }
+
+        // for(int i=pl;i<=neil;++i){
+        //     tempCand.push_back(PX[i]);
+        // }
+
+        if(isSubClique==true){
+            subClique=true;
+        }
+
+        // if(savePivot==true) tempCand.assign(PX.begin()+pl,PX.begin()+pr+1);
+        // else tempCand.assign(PX.begin()+pl,PX.begin()+neil+1);
+        tempCand.assign(PX.begin()+pl,PX.begin()+neil+1);
+    }else{
+        //generate real candidate
+        tempCand.assign(PX.begin()+pl,PX.begin()+pr+1);
+        if(xl>=pl){
+            bool isSubClique=true;
+            for(int i=pl;i<=pr;++i){
+                int j;
+                int u=PX[i];
+                for(j=0;j<tempAdjList[u].size();++j){
+                    int v=tempAdjList[u][j];
+                    if(IPX[v]<pl||IPX[v]>pr) break;
+                }
+                if(j!=psize-1){
+                    isSubClique=false;
+                    break;
+                }
+            }
+            if(isSubClique){
+                tempCand.clear();
+                tempCand.push_back(PX[pl]);
+                subClique=true;
+            }
+        }
+    }
+
+    vector<int> reslist;
+    reslist.reserve(tempCand.size());
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+        
+        vector<int> tempNewX;
+        tempNewX.reserve(xsize);
+        //searching in X
+        for(int j=xl;j<pl;++j){
+            int v=PX[j];
+            for(int k=0;k<tempAdjList[v].size();++k){
+                int possibleU=tempAdjList[v][k];
+                if(IPX[possibleU]<pl||IPX[possibleU]>pr) break;
+                if(possibleU==u){
+                    tempNewX.push_back(v);
+                    break;
+                }
+            }
+        }
+        //no need for searching in P
+
+        //prepare new X and P
+        int nxl=pl-1;
+        int npr=pl;
+        for(int j=0;j<tempNewX.size();++j){
+            exchange(PX,IPX[tempNewX[j]],nxl--,IPX);
+        }
+        for(int j=0;j<tempAdjList[u].size();++j){
+            int v=tempAdjList[u][j];
+            if(IPX[v]<pl||IPX[v]>pr) break;
+            exchange(PX,IPX[v],npr++,IPX);
+        }
+        nxl++;
+        npr--;
+
+        //shrink later
+        #ifdef fasterconnect
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int nsize=0;
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                if(IPX[nv]<xl||IPX[nv]>pr) break;
+                if(IPX[nv]>=nxl&&IPX[nv]<=npr){
+                    exchange(later[v],k,nsize++);
+                }
+            }
+        }
+        #endif
+
+        //shrink tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int numNeighborInNewP=0;
+            for(int k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl||IPX[nv]>pr) break;
+                if(IPX[nv]<=npr){
+                    exchange(tempAdjList[v],k,numNeighborInNewP++);
+                }
+            }
+        }
+
+        R.push_back(u);
+        // bkPivot(PX,IPX,tempAdjList,nxl,pl,npr,R,cliques);
+        // int res=bkConnect(needPivot&&(npr-pl+1)>nopivotPSize,nopivotPSize,savePivot,i>=tobeSave,subClique,tree,f,fans,kval,orderIndex,firstLayerSons,xTreeNodesStack,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        int res=bkConnectOnlyP(needPivot&&(npr-pl+1)>nopivotPSize,nopivotPSize,kval,subClique,fans,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        if(res!=-1) reslist.push_back(res);
+
+        R.pop_back();
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+        
+        //update tempAdjList
+        for(int j=xl;j<=pr;++j){
+            int v=PX[j];
+            int uindex=-1;
+            int k;
+            for(k=0;k<tempAdjList[v].size();++k){
+                int nv=tempAdjList[v][k];
+                if(IPX[nv]<pl-1||IPX[nv]>pr) break;
+                if(nv==u) uindex=k;
+            }
+            if(uindex==-1) continue;
+            exchange(tempAdjList[v],uindex,k-1);
+        }
+    }
+
+    //recover X
+    for(int i=0;i<tempCand.size();++i){
+        int u=tempCand[i];
+        exchange(PX,IPX[u],--pl,IPX);
+    }
+
+    if(R.size()>=kval-1&&reslist.size()>1){
+        //update size of fans
+        fans.updateSize(cliques.size());
+        //link cliques
+        // connectCliques(tree,f,fans,orderIndex,firstLayerSons,xTreeNodesStack,PX,IPX,xl,originalPl,pr,later,tempAdjList,R);
+        int res0=reslist[0];
+        for(int i=1;i<reslist.size();++i){
+            fans.merge(reslist[i],res0);
+        }
+        return fans.find(res0);
+    }else{
+        return -1;
+    }
+}
+
+void Graph::listConnectMaximalCliquesOnlyP(int kval,int nopivotPSize,vector<vector<int>>& cliques,unf& fans){
+    int adjListSize=adjList.size();
+
+    vector<vector<int> > tempAdjList;
+    vector<int> PX,IPX,R;
+    PX.resize(adjListSize);
+    IPX.resize(adjListSize);
+    R.reserve(adjListSize);
+
+    //initialize PX and IPX
+    for(int i=0;i<adjListSize;++i){
+        PX[i]=IPX[i]=i;
+    }
+
+    vector<vector<int> > later;
+    vector<int> order;
+    // vector<int> orderIndex;
+    int degenaracy=getDegeneracyOrder(order,later);
+
+    cerr<<"degeneracy: "<<degenaracy<<endl;
+
+    tempAdjList.resize(adjListSize);
+    for(int i=0;i<adjListSize;++i) tempAdjList[i].reserve(degenaracy);
+
+    int pl=0;
+
+    for(int i=0;i<order.size();++i){
+        int u=order[i];
+        // obtain new P and X
+        int nxl=pl-1;
+        int npr=pl;
+        for(int j=0;j<adjList[u].size();++j){
+            int v=adjList[u][j];
+            if(IPX[v]<pl) exchange(PX,IPX[v],nxl--,IPX);
+            else exchange(PX,IPX[v],npr++,IPX);
+        }
+
+        nxl++;
+        npr--;
+
+        //shrink later
+        #ifdef fasterconnect
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            int nsize=0;
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                if(IPX[nv]>=nxl&&IPX[nv]<=npr){
+                    exchange(later[v],k,nsize++);
+                }
+            }
+        }
+        #endif
+
+        //obtain new tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            for(int k=0;k<later[v].size();++k){
+                int nv=later[v][k];
+                #ifdef fasterconnect
+                if(IPX[nv]<nxl||IPX[nv]>npr) break;
+                #endif
+                //nv is in new P
+                if(IPX[nv]>=pl&&IPX[nv]<=npr){
+                    tempAdjList[v].push_back(nv);
+                    if(j>=pl){
+                        tempAdjList[nv].push_back(v);
+                    }
+                }
+            }
+        }
+
+        R.push_back(u);
+        bkConnectOnlyP((npr-pl+1)>nopivotPSize,nopivotPSize,kval,false,fans,PX,IPX,tempAdjList,later,nxl,pl,npr,R,cliques);
+        R.pop_back();
+        
+        //clear tempAdjList
+        for(int j=nxl;j<=npr;++j){
+            int v=PX[j];
+            tempAdjList[v].clear();
+        }
+        exchange(PX,IPX[u],pl++,IPX);//P=P-{u},X=X+{u}
+    }
+
+}
 
 void Graph::readGraphE(string filename,int percent){
     vector<vector<int> > holdLines;
@@ -5059,6 +5724,22 @@ void Graph::initUpdate(){
     induce2vlist.resize(adjList.size(),-1);
 }
 
+void Graph::findNewMCliqueAddNode(Graph& ngraph,int node,int kval,vector<vector<int>>& newCliques){
+    for(int i=0;i<adjList[node].size();++i){
+        int nei=adjList[node][i];
+        commonNeighbors.push_back(nei);
+    }
+    commonNeighbors.push_back(node);
+    bornGraph(ngraph,commonNeighbors);
+    ngraph.listMaximalCliques(newCliques,kval);
+    for(int i=0;i<newCliques.size();++i){
+        for(int j=0;j<newCliques[i].size();++j){
+            newCliques[i][j]=induce2vlist[newCliques[i][j]];
+        }
+    }
+
+}
+
 void Graph::findNewMClique(Graph& ngraph,int a,int b,int kval,vector<vector<int>>& newCliques){
     for (int neighbor : adjList[a]) {
         if (adjMatrix.at(b).find(neighbor) != adjMatrix.at(b).end()) {
@@ -5077,6 +5758,124 @@ void Graph::findNewMClique(Graph& ngraph,int a,int b,int kval,vector<vector<int>
         }
     }
 
+}
+
+void Graph::localKCLMCL(int kval,vector<vector<int> >& cliques,unf& fans){
+    visGroup.resize(cliques.size(),false);
+    visGroups.reserve(cliques.size());
+
+    int adjlistSize=adjList.size();
+    unordered_map<int,vector<int> > cliqueGroup;
+    
+    //根据fans获取当前的group
+    for(int i=0;i<fans.fa.size();++i){
+        if(localCliqueMark[i]==0) continue;
+        int father=fans.find(i);
+        cliqueGroup[father].push_back(i);
+    }
+
+    vector<vector<int> > results;
+    unordered_map<int,vector<int> >::iterator it=cliqueGroup.begin();
+    while(it!=cliqueGroup.end()){
+        results.push_back(it->second);
+        it++;
+    }
+
+    //找到group之间的overlap nodes
+    vector<int> nodesoverlap;
+    nodesoverlap.resize(adjlistSize,0);
+    for(int i=0;i<results.size();++i){
+        unordered_set<int> tset;
+        for(int j=0;j<results[i].size();++j){
+            int c=results[i][j];
+            for(int k=0;k<cliques[c].size();++k){
+                int u=cliques[c][k];
+                tset.insert(u);
+            }
+        }
+        unordered_set<int>::iterator it=tset.begin();
+        while(it!=tset.end()){
+            nodesoverlap[*it]++;
+            it++;
+        }
+    }
+
+    vector<int> overlapNodes;
+    vector<int> IPX;
+    overlapNodes.reserve(adjlistSize);
+    IPX.resize(adjlistSize,1);
+    for(int i=0;i<adjlistSize;++i){
+        if(nodesoverlap[i]>1){
+            overlapNodes.push_back(i);
+            IPX[i]=0;
+        }
+    }
+
+    // cerr<<"overlap nodes: "<<overlapNodes.size()<<" out of "<<adjlistSize<<endl;
+
+    if(overlapNodes.size()==0) return;
+
+
+
+    //根据overlap nodes来削减adjlist
+    vector<int> order;
+    vector<vector<int> > later;
+    
+    for(int i=0;i<overlapNodes.size();++i){
+        int u=overlapNodes[i];
+        // exchange(PX,IPX[u],pr++,IPX);
+        int newr=0;
+        for(int j=0;j<adjList[u].size();++j){
+            int v=adjList[u][j];
+            if(IPX[v]==0){
+                exchange(adjList[u],j,newr++);
+            }
+        }
+    }
+
+    vector<vector<int> > node2mclique;
+    node2mclique.resize(adjList.size());
+    for(int i=0;i<cliques.size();++i){
+        if(localCliqueMark[i]==0) continue;
+        for(int j=0;j<cliques[i].size();++j){
+            int u=cliques[i][j];
+            node2mclique[u].push_back(i);
+            // node2cliquesCount[u]++;
+        }
+    }
+    
+    // struct timeval start,end;
+    // gettimeofday(&start,NULL);
+    listConnectKcliquesPartialNox(kval,overlapNodes,overlapNodes,IPX,0,cliques,node2mclique,fans);
+    // gettimeofday(&end,NULL);
+    // cerr<<"kclique time: "<<(end.tv_sec-start.tv_sec)*1000+(end.tv_usec-start.tv_usec)/1000<<endl;
+
+}
+
+bool Graph::delEdge(int a,int b){
+    if(adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()){
+        return false;
+    }
+    adjMatrix[a].erase(b);
+    adjMatrix[b].erase(a);
+    return true;
+}
+
+bool Graph::addNode(int node,vector<int>& neiList){
+    if(node>=adjList.size()){
+        adjList.resize(node+1);
+    }
+    int a=node;
+    for(int i=0;i<neiList.size();++i){
+        int b=neiList[i];
+        if (adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()) {
+            adjList[a].push_back(b); 
+            adjList[b].push_back(a); 
+    
+            adjMatrix[a].insert(b);
+            adjMatrix[b].insert(a);
+        }
+    }
 }
 
 bool Graph::addEdge(int a,int b){
@@ -5126,12 +5925,208 @@ void Graph::readGraphPart(string filename){
     for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
 }
 
-void Graph::readGraphPart(string filename,vector<vector<int> >& leftLines,int percent){
+void Graph::readGraphDelVertex(string filename,unordered_set<int>& deleteNodes,int delvertexnum){
     vector<vector<int> > holdLines;
     bool res=readFile(filename,holdLines);
     if(!res) exit(0);
 
-    int presize=holdLines.size()/100*percent;
+    int bigval=0;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(bigval<holdLines[i][j]) bigval=holdLines[i][j];
+            // if(holdLines[i][j]>upperbound) deleteNodes.insert(holdLines[i][j]);
+        }
+    }
+
+    int upperbound=bigval-delvertexnum;
+    cerr<<bigval<<" "<<upperbound<<endl;
+    // cerr<<holdLines[0].size()<<endl;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(holdLines[i][j]>upperbound) deleteNodes.insert(holdLines[i][j]);
+        }
+    }
+    // set<int> realdeleteNodes;
+    // unordered_set<int> testset;
+    // unordered_map<int,vector<int>> leftEdges;
+    // for(int i=0;i<holdLines.size();++i){
+    //     int a,b;
+    //     a=holdLines[i][0];
+    //     b=holdLines[i][1];
+    //     if(a>b){
+    //         int temp=a;
+    //         a=b;
+    //         b=temp;
+    //     }
+    //     // if(a>upperbound) realdeleteNodes.insert(a);
+    //     // if(b>upperbound) realdeleteNodes.insert(b);
+    //     // if(b>upperbound){
+    //     //     leftEdges[b].push_back(a);
+    //     // }
+    //     // if(b>upperbound){
+    //     //     // testset.insert(a);
+    //     //     deleteNodes.insert(a);
+    //     //     deleteNodes.insert(b);
+    //     // }
+    //     testset.insert(b);
+    // }
+
+    // for(int i=0;i<holdLines.size();++i){
+    //     int a,b;
+    //     a=holdLines[i][0];
+    //     b=holdLines[i][1];
+    //     if(a>b){
+    //         int temp=a;
+    //         a=b;
+    //         b=temp;
+    //     }
+    //     if(b>upperbound&&a<=upperbound&&testset.find(a)==testset.end()){
+    //         deleteNodes.insert(a);
+    //     }
+    //     // for(int j=0;j<holdLines[i].size();++j){
+    //     //     if(holdLines[i][j]<=upperbound&&testset.find(holdLines[i][j])==testset.end()) deleteNodes.insert(holdLines[i][j]);
+    //     // }
+    // }
+    // cerr<<"deleteNodes size: "<<realdeleteNodes.size()<<endl;
+    // cerr<<"leftedges size: "<<leftEdges.size()<<endl;
+    // cerr<<"focus nodes: "<<testset.size()<<endl;
+
+    adjList.resize(bigval+1);
+
+    unordered_map<int,unordered_set<int>> tmpAdjMatrix;
+    for(int i=0;i<holdLines.size();++i){
+        int a=holdLines[i][0];
+        int b=holdLines[i][1];
+
+        if(tmpAdjMatrix.find(a)==tmpAdjMatrix.end()||tmpAdjMatrix[a].find(b)==tmpAdjMatrix[a].end()){
+            tmpAdjMatrix[a].insert(b);tmpAdjMatrix[b].insert(a);
+            adjList[a].push_back(b);
+            adjList[b].push_back(a);
+        }
+    }
+
+    for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
+}
+
+void Graph::readGraphAddVertex(string filename,unordered_map<int,vector<int>>& leftEdges,int addvertexnum,int& largest){
+    vector<vector<int> > holdLines;
+    bool res=readFile(filename,holdLines);
+    if(!res) exit(0);
+
+    vector<vector<int>> graphLines;
+    graphLines.reserve(holdLines.size());
+    largest=0;
+    for(int i=0;i<holdLines.size();++i){
+        int a,b;
+        a=holdLines[i][0];
+        b=holdLines[i][1];
+        if(a>b){
+            int temp=a;
+            a=b;
+            b=temp;
+        }
+
+        if(b>largest) largest=b;
+
+
+
+        // if(b<=upperbound){
+        //     graphLines.push_back(holdLines[i]);
+        // }else{
+        //     leftEdges[b].push_back(a);
+        // }
+    }
+
+    int upperbound=largest-addvertexnum;
+    cerr<<largest<<" "<<upperbound<<endl;
+
+    for(int i=0;i<holdLines.size();++i){
+        int a,b;
+        a=holdLines[i][0];
+        b=holdLines[i][1];
+        if(a>b){
+            int temp=a;
+            a=b;
+            b=temp;
+        }
+
+        if(b<=upperbound){
+            graphLines.push_back(holdLines[i]);
+        }else{
+            leftEdges[b].push_back(a);
+        }
+    }
+
+    // int presize=holdLines.size()-postsize;
+    // leftLines.assign(holdLines.begin()+presize,holdLines.end());
+    // holdLines.resize(presize);
+    holdLines=graphLines;
+
+    int bigval=0;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(bigval<holdLines[i][j]) bigval=holdLines[i][j];
+        }
+    }
+    
+
+    adjList.resize(bigval+1);
+
+    // unordered_map<int,unordered_set<int>> tmpAdjMatrix;
+    for(int i=0;i<holdLines.size();++i){
+        int a=holdLines[i][0];
+        int b=holdLines[i][1];
+
+        if(adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()){
+            adjMatrix[a].insert(b);adjMatrix[b].insert(a);
+            adjList[a].push_back(b);
+            adjList[b].push_back(a);
+        }
+    }
+
+    for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
+}
+
+void Graph::readGraphAllReturnPart(string filename,vector<vector<int> >& returnLines,int postsize){
+    vector<vector<int> > holdLines;
+    bool res=readFile(filename,holdLines);
+    if(!res) exit(0);
+
+    int presize=holdLines.size()-postsize;
+    returnLines.assign(holdLines.begin()+presize,holdLines.end());
+    // holdLines.resize(presize);
+
+    int bigval=0;
+    for(int i=0;i<holdLines.size();++i){
+        for(int j=0;j<holdLines[i].size();++j){
+            if(bigval<holdLines[i][j]) bigval=holdLines[i][j];
+        }
+    }
+    
+
+    adjList.resize(bigval+1);
+
+    // unordered_map<int,unordered_set<int>> tmpAdjMatrix;
+    for(int i=0;i<holdLines.size();++i){
+        int a=holdLines[i][0];
+        int b=holdLines[i][1];
+
+        if(adjMatrix.find(a)==adjMatrix.end()||adjMatrix[a].find(b)==adjMatrix[a].end()){
+            adjMatrix[a].insert(b);adjMatrix[b].insert(a);
+            adjList[a].push_back(b);
+            adjList[b].push_back(a);
+        }
+    }
+
+    for(int i=0;i<adjList.size();++i) adjList[i].shrink_to_fit();
+}
+
+void Graph::readGraphPart(string filename,vector<vector<int> >& leftLines,int postsize){
+    vector<vector<int> > holdLines;
+    bool res=readFile(filename,holdLines);
+    if(!res) exit(0);
+
+    int presize=holdLines.size()-postsize;
     leftLines.assign(holdLines.begin()+presize,holdLines.end());
     holdLines.resize(presize);
 
