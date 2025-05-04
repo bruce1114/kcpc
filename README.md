@@ -1,57 +1,9 @@
 # **Source code for "Scaling Up k-Clique Percolation Community Detection"**
-This repository contains a reference implementation of algorithms for KCPC mining in large-scale graphs, including algorithms used in experiments (Detect, KCL, QKC, KCL-MCL and KCL-QKC).
+This repository contains a reference implementation of algorithms for KCPC mining in large-scale graphs, including algorithms used in experiments (QKC, KCL-MCL, KCL-QKC, Add-edge, Del-edge, Add-vertex, Del-vertex).
 
 ## **Environment Setup** ##
 All algorithms are implemented with C++11. You may download the repository and enter the main folder manually.
-## **Detect** ##
-Detect is the baseline method, you can compile and run it as follows:
-```
-cd kcpc
-g++ kcpc.cpp -o detect -std=c++11
-./detect ../smalldatasets/linux 4 0 \* program, dataset, k, output label *\
-list clique time: 451
-kcpc time: 10698 
-clique num: 36182
-kcpc num: 412    
-all time: 11148
-```
-If you want to output all the KCPCs, you can run Detect as follows:
-```
-./detect ../smalldatasets/linux 10 1
-list clique time: 338
-kcpc time: 0
-clique num: 15
-kcpc num: 1
-all time: 339
-kcpc-------:
-3848 1101 1134 73 3362 3221 875 914 874 876
-4982 1101 73 914 3221 875 1134 876 3362 874
-4520 1101 914 3362 1134 875 876 3221 73 874
-3221 1134 1101 875 876 3362 874 73 914 3288
-3221 1134 1101 875 876 3362 874 73 914 4688
-3221 1134 1101 875 876 3362 874 73 914 3887
-3221 1134 1101 875 876 3362 874 73 914 3921
-3221 1134 1101 875 876 3362 874 73 914 4529
-3221 1134 1101 875 876 3362 874 73 914 4594
-3481 876 3221 1134 874 875 3362 1101 914 4982
-3481 876 3221 1134 874 875 3362 1101 914 4520
-3481 876 3221 1134 874 875 3362 1101 914 3288
-3481 876 3221 1134 874 875 3362 1101 914 4688
-3481 876 3221 1134 874 875 3362 1101 914 4529
-3481 876 3221 1134 874 875 3362 1101 914 4594
-```
-In this case, only 1 KCPC can be found.
-## **KCL** ##
 
-KCL can be compiled and run as follows:
-```
-g++ kcpc_kclique.cpp -o kcl -std=c++11
-./kcl ../smalldatasets/linux 4 0 \* program, dataset, k, output label *\
-big color: 12
-all time: 1610
-kclique num: 68492
-kcpc num: 412
-```
 ## **QKC** ##
 QKC can be compiled and run as follows:
 
@@ -98,3 +50,27 @@ clique num: 36182
 all time: 1440
 kcpc num: 412
 ```
+
+## **Add-edge** ##
+Add-edge can be compiled and run as follows:
+
+```
+g++ kcpc_inc.cpp -o kcpc_inc -std=c++11
+./kcpc_inc ../smalldatasets/linux 3 10 100 0 \* program, dataset, k, l, number of edges to be added, output label *\
+degeneracy: 23
+list and connect time: 1291
+group num: 5136
+overlap nodes: 4526 out of 30825
+partial degeneracy: 22
+big color: 12
+kclique time: 833
+clique num: 111071
+all time: 2217
+kcpc num: 514
+clique num: 111115 fake clique num: 8 kcpc num: 514
+ave time: 0.39
+```
+
+The second-to-last line outputs the number of maximal cliques after all edges have been added, the number of invalidated maximal cliques, and the number of KCPCs. The last line reports the average time (in milliseconds) taken to add each edge.
+
+Del-edge, Add-vertex, Del-vertex can be compiled and run in similar way.
